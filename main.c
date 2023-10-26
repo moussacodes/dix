@@ -4,6 +4,59 @@
 #include <string.h>
 #include <stdbool.h>
 #include <unistd.h>
+#include <errno.h>
+
+#define CHECK_MEMORY(ptr)                                                               \
+    do                                                                                  \
+    {                                                                                   \
+        if (!(ptr))                                                                     \
+        {                                                                               \
+            fprintf(stderr, "Memory allocation failed at %s:%d\n", __FILE__, __LINE__); \
+            exit(EXIT_FAILURE);                                                         \
+        }                                                                               \
+    } while (0)
+
+#define SAFE_MALLOC(ptr, size) \
+    do                         \
+    {                          \
+        ptr = malloc(size);    \
+        CHECK_MEMORY(ptr);     \
+    } while (0)
+
+#define SAFE_REALLOC(ptr, size)              \
+    ({                                       \
+        void *temp_ptr = realloc(ptr, size); \
+        CHECK_MEMORY(temp_ptr);              \
+        temp_ptr;                            \
+    })
+
+typedef struct
+{
+    char *content;
+    int len;
+} ed_buffer;
+
+void bufpush(ed_buffer *buf, const char *str, int len)
+{
+    char *new = realloc(buf->content, buf->len + len);
+
+    if (new == NULL)
+        return;
+    memcpy(new + buf->len, str, len);
+    buf->content = new;
+    buf->len += len;
+}
+
+void freeBuf(ed_buffer *buf)
+{
+    free(buf->content);
+    free(buf);
+}
+
+#define BUFFER  \
+    {           \
+        NULL, 0 \
+    }
 
 enum Keypress
 {
@@ -35,64 +88,76 @@ typedef struct
     int lineCount;
     int characterCount;
 } EditorState;
+static struct termios orig_termios; /* In order to restore at exit.*/
 
-void enableRawMode()
+int enableRawMode(int fd)
 {
-    struct termios raw;
-    tcgetattr(STDIN_FILENO, &raw);
-    raw.c_lflag &= ~(ECHO | ICANON);
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+    setvbuf(stdout, (char *)NULL, _IOLBF, 0);
+    struct termios oldattr, newattr;
+
+    // Get the current terminal attributes
+    tcgetattr(STDIN_FILENO, &oldattr);
+    newattr = oldattr;
+
+    // Set the terminal to raw mode
+    newattr.c_lflag &= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &newattr);
 }
 
-Line initiateNewLine(int lnb, int tab)
+Line initiateNewLine(int lnb)
 {
-    // char *newLineContent = malloc(sizeof(char));
-    // if (newLineContent == NULL)
-    // {
-    //     perror("Error: Failed to allocate memory");
-    //     exit(0);
-    // }
+    char *lineContentText = malloc(sizeof(char)); // Make sure to allocate enough memory
+    strcpy(lineContentText, "");
     Line newLine = {
-        .lineContent = "newLine",
+        .lineContent = lineContentText,
         .line = lnb + 1,
-        .position = 0 + tab};
+        .position = 0};
 
     return newLine;
 }
 
-void printLine(Line l)
+void updateScreen(EditorState *e)
 {
-    char *str = l.lineContent;
-    int length = strlen(str);
-    printf("%s", str);
-    write(STDOUT_FILENO, str, length);
+    write(STDOUT_FILENO, "\x1b[2J", 4); // Clear the screen
+    write(STDOUT_FILENO, "\x1b[H", 3);  // Move cursor to top-left position
+
+    write(STDOUT_FILENO, e->lines[1].lineContent, strlen(e->lines[1].lineContent));
 }
 
-void printContent(EditorState e)
-{
-    for (int i = 0; i < e.lineCount; i++)
-    {
-        printLine(e.lines[i]);
-    }
-}
+// void updateScreen(char *line)
+// {
+//     write(STDOUT_FILENO, "\x1b[2J", 4); // Clear the screen
+//     write(STDOUT_FILENO, "\x1b[H", 3);  // Move cursor to top-left position
+
+//     // for (int i = 0; i < e->lineCount; i++) {
+//     //     write(STDOUT_FILENO, e->lines[i].lineContent, strlen(e->lines[i].lineContent));
+//     //     write(STDOUT_FILENO, "\r\n", 2); // Add a newline after each line
+//     // }
+
+//     write(STDOUT_FILENO, line, strlen(line));
+// }
 
 void insertChar(char addedChar, EditorState e)
 {
+    Line *line = &(e.lines[e.lineCount]);
 
-    Line line = e.lines[e.lineCount];
     switch (addedChar)
     {
     case ENTER:
-        printf("Enter key pressed.\n");
+        // insertNewChar('\n', line);
+        Line l = initiateNewLine(e.lineCount);
+        e.lines[e.lineCount++] = l;
+        updateScreen(&e);
         break;
     case ESCAPE:
         printf("Escape key pressed.\n");
         break;
     case BACKSPACE:
-        if (line.position > 0)
+        if (line->position > 0)
         {
-            line.lineContent = realloc(line.lineContent, strlen(line.lineContent));
-            line.lineContent[--line.position] = '\0';
+            line->lineContent = SAFE_REALLOC(line->lineContent, line->position);
+            line->lineContent[--line->position] = '\0';
+            updateScreen(&e);
         }
         break;
     case TAB:
@@ -110,21 +175,19 @@ void insertChar(char addedChar, EditorState e)
     case CTRL_X:
         printf("Ctrl + X key pressed.\n");
         break;
-
     default:
-        if (line.lineContent == NULL)
-        {
-            line.lineContent = malloc(sizeof(char)); // Allocate memory for an empty string
-            line.lineContent[0] = '\0';   // Initialize the string
-        }
-        line.lineContent = realloc(line.lineContent, line.position + 2); // Add 2 for the new character and the null terminator
-        line.lineContent[line.position++] = addedChar;
-        line.lineContent[line.position] = '\0';
+        addCharToBuffer(addedChar, line);
 
+        updateScreen(&e);
         break;
     }
+}
 
-    printContent(e);
+void addCharToBuffer(const char addedChar, Line *line)
+{
+    line->lineContent = realloc(line->lineContent, (line->position) + 2); // Increase size for the new character and the null terminator
+    line->lineContent[line->position++] = addedChar;
+    line->lineContent[line->position] = '\0';
 }
 
 EditorState initiateEditor()
@@ -142,13 +205,13 @@ EditorState initiateEditor()
 
 int main()
 {
-    enableRawMode();
+    enableRawMode(STDIN_FILENO);
     system("clear");
     int lineNb = 0;
     EditorState editor = initiateEditor();
     lineNb = editor.lineCount;
-    editor.lines = malloc(sizeof(Line));
-    editor.lines[lineNb] = initiateNewLine(lineNb, 0);
+    SAFE_MALLOC(editor.lines, 1);
+    editor.lines[lineNb] = initiateNewLine(lineNb);
 
     char c;
     while (1)
@@ -167,7 +230,7 @@ int main()
             }
         }
     }
-
+    freeEditor(editor);
     return 0;
 }
 
@@ -179,6 +242,5 @@ void freeEditor(EditorState e)
     }
     free(e.lines);
 }
-
 
 // fix error when character is pressed
