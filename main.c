@@ -30,34 +30,6 @@
         temp_ptr;                            \
     })
 
-typedef struct
-{
-    char *content;
-    int len;
-} ed_buffer;
-
-void bufpush(ed_buffer *buf, const char *str, int len)
-{
-    char *new = realloc(buf->content, buf->len + len);
-
-    if (new == NULL)
-        return;
-    memcpy(new + buf->len, str, len);
-    buf->content = new;
-    buf->len += len;
-}
-
-void freeBuf(ed_buffer *buf)
-{
-    free(buf->content);
-    free(buf);
-}
-
-#define BUFFER  \
-    {           \
-        NULL, 0 \
-    }
-
 enum Keypress
 {
     ENTER = 10,
@@ -68,7 +40,6 @@ enum Keypress
     CTRL_S = 19,
     CTRL_V = 22,
     CTRL_X = 24,
-    // Add more control characters as needed
 };
 
 typedef struct
@@ -92,10 +63,9 @@ static struct termios orig_termios; /* In order to restore at exit.*/
 
 int enableRawMode(int fd)
 {
-    setvbuf(stdout, (char *)NULL, _IOLBF, 0);
+    setvbuf(stdout, (char *)NULL, _IONBF, 0);
     struct termios oldattr, newattr;
 
-    // Get the current terminal attributes
     tcgetattr(STDIN_FILENO, &oldattr);
     newattr = oldattr;
 
@@ -121,18 +91,22 @@ void updateScreen(EditorState *e)
     write(STDOUT_FILENO, "\x1b[2J", 4); // Clear the screen
     write(STDOUT_FILENO, "\x1b[H", 3);  // Move cursor to top-left position
 
-    write(STDOUT_FILENO, e->lines[1].lineContent, strlen(e->lines[1].lineContent));
+    for (int i = 0; i < e->lineCount; i++)
+    {
+        write(STDOUT_FILENO, e->lines[i].lineContent, strlen(e->lines[i].lineContent));
+        write(STDOUT_FILENO, "\n", 1);
+    }
 }
 
-// void updateScreen(char *line)
+// void updateScreen(Ed)
 // {
 //     write(STDOUT_FILENO, "\x1b[2J", 4); // Clear the screen
 //     write(STDOUT_FILENO, "\x1b[H", 3);  // Move cursor to top-left position
 
-//     // for (int i = 0; i < e->lineCount; i++) {
-//     //     write(STDOUT_FILENO, e->lines[i].lineContent, strlen(e->lines[i].lineContent));
-//     //     write(STDOUT_FILENO, "\r\n", 2); // Add a newline after each line
-//     // }
+//     for (int i = 0; i < e->lineCount; i++) {
+//         write(STDOUT_FILENO, e->lines[i].lineContent, strlen(e->lines[i].lineContent));
+//         write(STDOUT_FILENO, "\r\n", 2); // Add a newline after each line
+//     }
 
 //     write(STDOUT_FILENO, line, strlen(line));
 // }
@@ -144,7 +118,7 @@ void insertChar(char addedChar, EditorState e)
     switch (addedChar)
     {
     case ENTER:
-        // insertNewChar('\n', line);
+        addCharToBuffer('\n', line);
         Line l = initiateNewLine(e.lineCount);
         e.lines[e.lineCount++] = l;
         updateScreen(&e);

@@ -1,6 +1,6 @@
 # Dix Text Editor
 
-Dix is a lightweight text editor currently under development, designed to provide a simple and intuitive editing experience for programmers and writers. With its minimalistic interface and essential features, Dix aims to streamline the editing process and enhance the productivity of users.
+Dix is a lightweight text editor currently under development
 
 ## Features (Under Development)
 
