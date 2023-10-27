@@ -4,7 +4,6 @@
 #include <string.h>
 #include <stdbool.h>
 #include <unistd.h>
-#include <errno.h>
 
 #define CHECK_MEMORY(ptr)                                                               \
     do                                                                                  \
@@ -53,17 +52,18 @@ typedef struct
 typedef struct
 {
     int cursor_x, cursor_y;
-    Line *lines;
+    Line **lines;
     char *filename;
     bool saved;
     int lineCount;
     int characterCount;
 } EditorState;
-static struct termios orig_termios; /* In order to restore at exit.*/
+
+static struct termios orig_termios; /* In order to restore at exit. */
 
 int enableRawMode(int fd)
 {
-    setvbuf(stdout, (char *)NULL, _IONBF, 0);
+    setvbuf(stdout, NULL, _IONBF, 0); // Disable output buffering
     struct termios oldattr, newattr;
 
     tcgetattr(STDIN_FILENO, &oldattr);
@@ -72,18 +72,19 @@ int enableRawMode(int fd)
     // Set the terminal to raw mode
     newattr.c_lflag &= ~(ICANON | ECHO);
     tcsetattr(STDIN_FILENO, TCSANOW, &newattr);
+    return 0;
 }
 
-Line initiateNewLine(int lnb)
+void initiateNewLine(int lnb, EditorState *e)
 {
-    char *lineContentText = malloc(sizeof(char)); // Make sure to allocate enough memory
-    strcpy(lineContentText, "");
-    Line newLine = {
-        .lineContent = lineContentText,
-        .line = lnb + 1,
-        .position = 0};
+    Line *newLine = malloc(sizeof(Line));
+    CHECK_MEMORY(newLine);
+    newLine->lineContent = NULL;
+    newLine->line = lnb + 1;
+    newLine->position = 0;
 
-    return newLine;
+    e->lines = SAFE_REALLOC(e->lines, (e->lineCount + 1) * sizeof(Line *));
+    e->lines[e->lineCount++] = newLine;
 }
 
 void updateScreen(EditorState *e)
@@ -93,35 +94,20 @@ void updateScreen(EditorState *e)
 
     for (int i = 0; i < e->lineCount; i++)
     {
-        write(STDOUT_FILENO, e->lines[i].lineContent, strlen(e->lines[i].lineContent));
-        write(STDOUT_FILENO, "\n", 1);
+        write(STDOUT_FILENO, e->lines[i]->lineContent, strlen(e->lines[i]->lineContent));
     }
 }
 
-// void updateScreen(Ed)
-// {
-//     write(STDOUT_FILENO, "\x1b[2J", 4); // Clear the screen
-//     write(STDOUT_FILENO, "\x1b[H", 3);  // Move cursor to top-left position
-
-//     for (int i = 0; i < e->lineCount; i++) {
-//         write(STDOUT_FILENO, e->lines[i].lineContent, strlen(e->lines[i].lineContent));
-//         write(STDOUT_FILENO, "\r\n", 2); // Add a newline after each line
-//     }
-
-//     write(STDOUT_FILENO, line, strlen(line));
-// }
-
-void insertChar(char addedChar, EditorState e)
+void insertChar(char addedChar, EditorState *e)
 {
-    Line *line = &(e.lines[e.lineCount]);
+    Line *line = e->lines[e->lineCount - 1];
 
     switch (addedChar)
     {
     case ENTER:
         addCharToBuffer('\n', line);
-        Line l = initiateNewLine(e.lineCount);
-        e.lines[e.lineCount++] = l;
-        updateScreen(&e);
+        initiateNewLine(e->lineCount, e);
+        updateScreen(e);
         break;
     case ESCAPE:
         printf("Escape key pressed.\n");
@@ -131,7 +117,11 @@ void insertChar(char addedChar, EditorState e)
         {
             line->lineContent = SAFE_REALLOC(line->lineContent, line->position);
             line->lineContent[--line->position] = '\0';
-            updateScreen(&e);
+            updateScreen(e);
+        }
+        else
+        {
+            // treat the case where the line is empty
         }
         break;
     case TAB:
@@ -151,15 +141,14 @@ void insertChar(char addedChar, EditorState e)
         break;
     default:
         addCharToBuffer(addedChar, line);
-
-        updateScreen(&e);
+        updateScreen(e);
         break;
     }
 }
 
 void addCharToBuffer(const char addedChar, Line *line)
 {
-    line->lineContent = realloc(line->lineContent, (line->position) + 2); // Increase size for the new character and the null terminator
+    line->lineContent = SAFE_REALLOC(line->lineContent, (line->position) + 2); // Increase size for the new character and the null terminator
     line->lineContent[line->position++] = addedChar;
     line->lineContent[line->position] = '\0';
 }
@@ -177,15 +166,24 @@ EditorState initiateEditor()
     return editor;
 }
 
+void freeEditor(EditorState e)
+{
+    for (int i = 0; i < e.lineCount; i++)
+    {
+        free(e.lines[i]->lineContent);
+        free(e.lines[i]);
+    }
+    free(e.lines);
+}
+
 int main()
 {
     enableRawMode(STDIN_FILENO);
     system("clear");
-    int lineNb = 0;
     EditorState editor = initiateEditor();
-    lineNb = editor.lineCount;
-    SAFE_MALLOC(editor.lines, 1);
-    editor.lines[lineNb] = initiateNewLine(lineNb);
+    int lineNb = editor.lineCount;
+    SAFE_MALLOC(editor.lines, sizeof(Line *));
+    initiateNewLine(lineNb, &editor);
 
     char c;
     while (1)
@@ -199,7 +197,7 @@ int main()
 
             else
             {
-                insertChar(c, editor);
+                insertChar(c, &editor);
                 // write(STDOUT_FILENO, &c, 1); // writes a character out
             }
         }
@@ -207,14 +205,3 @@ int main()
     freeEditor(editor);
     return 0;
 }
-
-void freeEditor(EditorState e)
-{
-    for (int i = 0; i < e.lineCount; i++)
-    {
-        free(e.lines[i].lineContent);
-    }
-    free(e.lines);
-}
-
-// fix error when character is pressed
