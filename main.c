@@ -107,6 +107,7 @@ void updateScreen(EditorState *e)
 void insertChar(char addedChar, EditorState *e)
 {
     Line *line = e->lines[e->lineCount - 1];
+    Line *tempLine; // will be used to delete lines
 
     switch (addedChar)
     {
@@ -124,7 +125,34 @@ void insertChar(char addedChar, EditorState *e)
             line->lineContent[--line->position] = '\0';
             updateScreen(e);
         }
+        else
+        {
+            if (e->lineCount > 1)
+            {
+                free(line->lineContent);
+                e->lineCount -= 1;
+                line = e->lines[e->lineCount - 1];
+                line->position = strlen(line->lineContent);
+                if (line->position > 0)
+                {
+                    size_t newSize = line->position * sizeof(char); // Calculate the new size in bytes
+                    line->lineContent = realloc(line->lineContent, newSize);
+                }
+                else
+                {
+ 
+                    line->lineContent = NULL;
+                    updateScreen(e);
+                }
+                
+            }
+            else
+            {
+                updateScreen(e);
+            }
+        }
         break;
+
     case TAB:
         printf("Tab key pressed.\n");
         break;
