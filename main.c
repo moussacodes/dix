@@ -75,26 +75,32 @@ int enableRawMode(int fd)
     return 0;
 }
 
-void initiateNewLine(int lnb, EditorState *e)
+void initiateNewLine(EditorState *e)
 {
-    Line *newLine = malloc(sizeof(Line));
-    CHECK_MEMORY(newLine);
-    newLine->lineContent = NULL;
-    newLine->line = lnb + 1;
-    newLine->position = 0;
-
     e->lines = SAFE_REALLOC(e->lines, (e->lineCount + 1) * sizeof(Line *));
-    e->lines[e->lineCount++] = newLine;
+    e->lines[e->lineCount] = malloc(sizeof(Line));
+    if (!e->lines[e->lineCount])
+    {
+        fprintf(stderr, "Memory allocation failed at %s:%d\n", __FILE__, __LINE__);
+        exit(EXIT_FAILURE);
+    }
+    Line *newLine = e->lines[e->lineCount];
+    newLine->lineContent = NULL;
+    newLine->line = e->lineCount + 1;
+    newLine->position = 0;
+    e->lineCount++;
 }
 
 void updateScreen(EditorState *e)
 {
     write(STDOUT_FILENO, "\x1b[2J", 4); // Clear the screen
     write(STDOUT_FILENO, "\x1b[H", 3);  // Move cursor to top-left position
-
     for (int i = 0; i < e->lineCount; i++)
     {
-        write(STDOUT_FILENO, e->lines[i]->lineContent, strlen(e->lines[i]->lineContent));
+        if (e->lines[i]->lineContent != NULL)
+        {
+            write(STDOUT_FILENO, e->lines[i]->lineContent, strlen(e->lines[i]->lineContent));
+        }
     }
 }
 
@@ -106,7 +112,7 @@ void insertChar(char addedChar, EditorState *e)
     {
     case ENTER:
         addCharToBuffer('\n', line);
-        initiateNewLine(e->lineCount, e);
+        initiateNewLine(e);
         updateScreen(e);
         break;
     case ESCAPE:
@@ -115,13 +121,8 @@ void insertChar(char addedChar, EditorState *e)
     case BACKSPACE:
         if (line->position > 0)
         {
-            line->lineContent = SAFE_REALLOC(line->lineContent, line->position);
             line->lineContent[--line->position] = '\0';
             updateScreen(e);
-        }
-        else
-        {
-            // treat the case where the line is empty
         }
         break;
     case TAB:
@@ -148,13 +149,44 @@ void insertChar(char addedChar, EditorState *e)
 
 void addCharToBuffer(const char addedChar, Line *line)
 {
-    line->lineContent = SAFE_REALLOC(line->lineContent, (line->position) + 2); // Increase size for the new character and the null terminator
-    line->lineContent[line->position++] = addedChar;
-    line->lineContent[line->position] = '\0';
+    if (line->lineContent == NULL)
+    {
+        line->lineContent = malloc(2 * sizeof(char)); // Allocate initial memory for one character and the null terminator
+        CHECK_MEMORY(line->lineContent);
+        line->lineContent[0] = addedChar;
+        line->lineContent[1] = '\0';
+        line->position = 1; // Update the position
+    }
+    else
+    {
+        char *temp_ptr = realloc(line->lineContent, (line->position) + 2); // Increase size for the new character and the null terminator
+        if (temp_ptr == NULL)
+        {
+            fprintf(stderr, "Memory reallocation failed at %s:%d\n", __FILE__, __LINE__);
+            exit(EXIT_FAILURE);
+        }
+        line->lineContent = temp_ptr;
+        line->lineContent[line->position] = addedChar;
+        line->lineContent[line->position + 1] = '\0'; // Update the null terminator
+        line->position++;                             // Increment the position
+    }
 }
 
-EditorState initiateEditor()
+void freeEditor(EditorState *e)
 {
+    for (int i = 0; i < e->lineCount; i++)
+    {
+        free(e->lines[i]->lineContent);
+        free(e->lines[i]);
+    }
+    free(e->lines);
+}
+
+int main()
+{
+    enableRawMode(STDIN_FILENO);
+    system("clear");
+
     EditorState editor = {
         .cursor_x = 0,
         .cursor_y = 0,
@@ -163,27 +195,8 @@ EditorState initiateEditor()
         .lineCount = 0,
         .characterCount = 0,
         .saved = false};
-    return editor;
-}
 
-void freeEditor(EditorState e)
-{
-    for (int i = 0; i < e.lineCount; i++)
-    {
-        free(e.lines[i]->lineContent);
-        free(e.lines[i]);
-    }
-    free(e.lines);
-}
-
-int main()
-{
-    enableRawMode(STDIN_FILENO);
-    system("clear");
-    EditorState editor = initiateEditor();
-    int lineNb = editor.lineCount;
-    SAFE_MALLOC(editor.lines, sizeof(Line *));
-    initiateNewLine(lineNb, &editor);
+    initiateNewLine(&editor);
 
     char c;
     while (1)
@@ -194,14 +207,12 @@ int main()
             {
                 break;
             }
-
             else
             {
                 insertChar(c, &editor);
-                // write(STDOUT_FILENO, &c, 1); // writes a character out
             }
         }
     }
-    freeEditor(editor);
+    freeEditor(&editor);
     return 0;
 }
