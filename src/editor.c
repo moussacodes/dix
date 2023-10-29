@@ -2,6 +2,11 @@
 
 static struct termios orig_termios; /* In order to restore at exit. */
 
+#define UP "\033[A"
+#define DOWN "\033[B"
+#define RIGHT "\033[C"
+#define LEFT "\033[D"
+
 int enableRawMode(int fd)
 {
     setvbuf(stdout, NULL, _IONBF, 0); // Disable output buffering
@@ -30,6 +35,8 @@ void initiateNewLine(EditorState *e)
     newLine->line = e->lineCount + 1;
     newLine->position = 0;
     e->lineCount++;
+    e->cursor_x = 0;
+    e->cursor_y += 1;
 }
 
 void updateScreen(EditorState *e)
@@ -42,6 +49,59 @@ void updateScreen(EditorState *e)
         {
             write(STDOUT_FILENO, e->lines[i]->lineContent, strlen(e->lines[i]->lineContent));
         }
+    }
+}
+
+void insert_key_press(int key_press, EditorState *editor)
+{
+
+    switch (key_press)
+    {
+
+    case UP_ARROW:
+
+        editor->cursor_y = (editor->cursor_y > 0) ? (editor->cursor_y - 1) : (editor->cursor_x = 0);
+         break;
+    case DOWN_ARROW:
+        if (editor->cursor_y == editor->lineCount)
+        {
+            editor->cursor_x = strlen(editor->lines[editor->lineCount]->lineContent);
+        }
+        else
+        {
+            editor->cursor_y += 1;
+        }
+         updateScreen(editor);
+        break;
+    case RIGHT_ARROW:
+        if (editor->cursor_x == strlen(editor->lines[editor->cursor_y]->lineContent))
+        {
+            if (editor->cursor_y < editor->lineCount)
+            {
+                editor->cursor_y += 1;
+            }
+        }
+        else
+        {
+            editor->cursor_x += 1;
+        }
+         updateScreen(editor);
+        break;
+    case LEFT_ARROW:
+        if (editor->cursor_x == 0)
+        {
+            if (editor->cursor_y > 0)
+            {
+                editor->cursor_y -= 1;
+            }
+        }
+        else
+        {
+            editor->cursor_x -= 1;
+        }
+ 
+        updateScreen(editor);
+        break;
     }
 }
 
@@ -64,15 +124,19 @@ void insertChar(char addedChar, EditorState *e)
         if (line->position > 0)
         {
             line->lineContent[--line->position] = '\0';
+            e->cursor_x -= 1;
             updateScreen(e);
         }
         else
         {
             if (e->lineCount > 1)
             {
+
                 free(line->lineContent);
                 e->lineCount -= 1;
+                e->cursor_y -= 1;
                 line = e->lines[e->lineCount - 1];
+                e->cursor_x -= 1;
                 line->position = strlen(line->lineContent);
                 if (line->position > 0)
                 {
@@ -97,25 +161,16 @@ void insertChar(char addedChar, EditorState *e)
 
         for (int i = 0; i < 4; i++)
         {
-            addCharToBuffer(' ', line); 
+            addCharToBuffer(' ', line);
         }
+        e->cursor_x += 4;
         // maybe i'll replace it with addCharToBuffer('\t', line); later on
         updateScreen(e);
         break;
-    case CTRL_C:
-        printf("Ctrl + C key pressed.\n");
-        break;
-    case CTRL_S:
-        printf("Ctrl + S key pressed.\n");
-        break;
-    case CTRL_V:
-        printf("Ctrl + V key pressed.\n");
-        break;
-    case CTRL_X:
-        printf("Ctrl + X key pressed.\n");
-        break;
+
     default:
         addCharToBuffer(addedChar, line);
+        e->cursor_x += 1;
         updateScreen(e);
         break;
     }

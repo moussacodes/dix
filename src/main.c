@@ -1,6 +1,7 @@
 
 
 #include "editor.h"
+#include "file.h"
 #include <ncurses.h>
 #include <sys/stat.h>
 #include <stdbool.h>
@@ -96,7 +97,6 @@ void init_status_bar(char *file_name)
     endwin();
 }
 
-
 bool file_exists(char *filename)
 {
     struct stat buffer;
@@ -142,18 +142,22 @@ FILE *create_file(char *file_path)
     return fd;
 }
 
-void fill_lines(char **file_content, EditorState *editor, int lines) {
+void fill_lines(char **file_content, EditorState *editor, int lines)
+{
     editor->lines = malloc(sizeof(Line *) * lines);
-    if (editor->lines == NULL) {
+    if (editor->lines == NULL)
+    {
         perror("Memory allocation failed for lines");
         exit(EXIT_FAILURE);
     }
 
-    editor->lineCount = 0;  // Initialize lineCount
+    editor->lineCount = 0; // Initialize lineCount
 
-    for (int i = 0; i < lines; i++) {
+    for (int i = 0; i < lines; i++)
+    {
         editor->lines[i] = malloc(sizeof(Line));
-        if (editor->lines[i] == NULL) {
+        if (editor->lines[i] == NULL)
+        {
             perror("Memory allocation failed for line");
             exit(EXIT_FAILURE);
         }
@@ -163,7 +167,8 @@ void fill_lines(char **file_content, EditorState *editor, int lines) {
 
         // Allocate memory for lineContent
         editor->lines[i]->lineContent = malloc(sizeof(char) * (editor->lines[i]->position + 1));
-        if (editor->lines[i]->lineContent == NULL) {
+        if (editor->lines[i]->lineContent == NULL)
+        {
             perror("Memory allocation failed for lineContent");
             exit(EXIT_FAILURE);
         }
@@ -175,7 +180,6 @@ void fill_lines(char **file_content, EditorState *editor, int lines) {
         editor->lineCount++;
     }
 }
-
 
 int main(int argc, char const *argv[])
 {
@@ -222,7 +226,6 @@ int main(int argc, char const *argv[])
     fill_lines(cont, &editor, lines);
     updateScreen(&editor);
 
-
     // init_status_bar(file_name);
     char c;
     while (1)
@@ -233,12 +236,47 @@ int main(int argc, char const *argv[])
             {
                 break;
             }
+            else if (c == 27)
+            {
+                if (read(STDIN_FILENO, &c, 1) == 1 && c == 91)
+                {
+                    if (read(STDIN_FILENO, &c, 1) == 1)
+                    {
+                        if (c == 'A')
+                        {
+                            insert_key_press(57, &editor);
+                        }
+                        else if (c == 'B')
+                        {
+                            insert_key_press(80, &editor);
+                        }
+                        else if (c == 'C')
+                        {
+                            insert_key_press(77, &editor);
+                        }
+                        else if (c == 'D')
+                        {
+                            insert_key_press(75, &editor);
+                        }
+                    }
+
+                    else
+                    {
+                        lseek(STDIN_FILENO, -1, SEEK_CUR);
+                    }
+                }
+            }
+            else if (c == 19) // CTRL_S: to save a file
+            {
+                save_content_to_file(&editor, file_path);
+            }
             else
             {
                 insertChar(c, &editor);
             }
         }
     }
+
     freeEditor(&editor);
     free(file_path);
     freeFileContent(cont, lines);
