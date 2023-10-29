@@ -30,8 +30,12 @@ then run:
 
 ```shell
 chmod +x ./run.sh
-./run.sh
+./run.sh [file_name]  # for now dix only support absolute paths (ex: /home/user/path/to/file/file.txt) this will open file.txt
 ```
+
+
+| :exclamation:  this was tested only on linux  |
+|-----------------------------------------|
 
 
 MIT License
