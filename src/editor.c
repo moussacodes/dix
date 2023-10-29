@@ -45,7 +45,6 @@ void updateScreen(EditorState *e)
     }
 }
 
-
 void insertChar(char addedChar, EditorState *e)
 {
     Line *line = e->lines[e->lineCount - 1];
@@ -82,11 +81,10 @@ void insertChar(char addedChar, EditorState *e)
                 }
                 else
                 {
- 
+
                     line->lineContent = NULL;
                     updateScreen(e);
                 }
-                
             }
             else
             {
@@ -96,7 +94,13 @@ void insertChar(char addedChar, EditorState *e)
         break;
 
     case TAB:
-        printf("Tab key pressed.\n");
+
+        for (int i = 0; i < 4; i++)
+        {
+            addCharToBuffer(' ', line); 
+        }
+        // maybe i'll replace it with addCharToBuffer('\t', line); later on
+        updateScreen(e);
         break;
     case CTRL_C:
         printf("Ctrl + C key pressed.\n");
