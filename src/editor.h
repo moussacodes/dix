@@ -4,9 +4,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <termios.h>
+#include <ncurses.h>
 #include <string.h>
 #include <stdbool.h>
 #include <unistd.h>
+
 
 #define CHECK_MEMORY(ptr) \
     do                     \
@@ -32,6 +34,7 @@
         temp_ptr;                \
     })
 
+
 enum Keypress
 {
     ENTER = 10,
@@ -42,7 +45,12 @@ enum Keypress
     CTRL_S = 19,
     CTRL_V = 22,
     CTRL_X = 24,
+    UP_ARROW = 57,    
+    DOWN_ARROW = 80,  
+    RIGHT_ARROW = 77, 
+    LEFT_ARROW = 75    
 };
+
 
 typedef struct
 {
@@ -67,5 +75,7 @@ void updateScreen(EditorState *e);
 void insertChar(char addedChar, EditorState *e);
 void addCharToBuffer(const char addedChar, Line *line);
 void freeEditor(EditorState *e);
+void insert_key_press(int key_press, EditorState* editor)
+;
 
 #endif // EDITOR_H
