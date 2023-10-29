@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 
 #define CHECK_MEMORY(ptr) \
