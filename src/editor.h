@@ -10,15 +10,14 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
-
-#define CHECK_MEMORY(ptr) \
-    do                     \
-    {                      \
-        if (!(ptr))        \
-        {                  \
+#define CHECK_MEMORY(ptr)                                                               \
+    do                                                                                  \
+    {                                                                                   \
+        if (!(ptr))                                                                     \
+        {                                                                               \
             fprintf(stderr, "Memory allocation failed at %s:%d\n", __FILE__, __LINE__); \
-            exit(EXIT_FAILURE); \
-        } \
+            exit(EXIT_FAILURE);                                                         \
+        }                                                                               \
     } while (0)
 
 #define SAFE_MALLOC(ptr, size) \
@@ -28,13 +27,12 @@
         CHECK_MEMORY(ptr);     \
     } while (0)
 
-#define SAFE_REALLOC(ptr, size) \
-    ({                           \
+#define SAFE_REALLOC(ptr, size)              \
+    ({                                       \
         void *temp_ptr = realloc(ptr, size); \
-        CHECK_MEMORY(temp_ptr);  \
-        temp_ptr;                \
+        CHECK_MEMORY(temp_ptr);              \
+        temp_ptr;                            \
     })
-
 
 enum Keypress
 {
@@ -46,12 +44,11 @@ enum Keypress
     CTRL_S = 19,
     CTRL_V = 22,
     CTRL_X = 24,
-    UP_ARROW = 57,    
-    DOWN_ARROW = 80,  
-    RIGHT_ARROW = 77, 
-    LEFT_ARROW = 75    
+    UP_ARROW = 57,
+    DOWN_ARROW = 80,
+    RIGHT_ARROW = 77,
+    LEFT_ARROW = 75
 };
-
 
 typedef struct
 {
@@ -65,6 +62,7 @@ typedef struct
     int cursor_x, cursor_y;
     Line **lines;
     char *filename;
+    char *filextension;
     bool saved;
     int lineCount;
     int characterCount;
@@ -76,7 +74,6 @@ void updateScreen(EditorState *e);
 void insertChar(char addedChar, EditorState *e);
 void addCharToBuffer(const char addedChar, Line *line);
 void freeEditor(EditorState *e);
-void insert_key_press(int key_press, EditorState* editor)
-;
+void insert_key_press(int key_press, EditorState *editor);
 
 #endif // EDITOR_H
