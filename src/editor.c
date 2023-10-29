@@ -45,7 +45,6 @@ void updateScreen(EditorState *e)
     }
 }
 
-
 void insertChar(char addedChar, EditorState *e)
 {
     Line *line = e->lines[e->lineCount - 1];
@@ -82,11 +81,10 @@ void insertChar(char addedChar, EditorState *e)
                 }
                 else
                 {
- 
+
                     line->lineContent = NULL;
                     updateScreen(e);
                 }
-                
             }
             else
             {

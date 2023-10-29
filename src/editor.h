@@ -56,6 +56,7 @@ typedef struct
     int cursor_x, cursor_y;
     Line **lines;
     char *filename;
+    FILE* file;
     bool saved;
     int lineCount;
     int characterCount;

@@ -13,4 +13,4 @@ cmake ..
 make
 
 # Execute the built program
-./dix
+./dix $1
