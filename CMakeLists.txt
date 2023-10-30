@@ -11,6 +11,8 @@ set(SOURCES
     src/editor.h
     src/file.h
     src/file.c
+    src/highlight.h
+    src/highlight.c
 )
 
 add_executable(dix ${SOURCES})

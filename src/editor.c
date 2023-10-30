@@ -2,10 +2,13 @@
 
 static struct termios orig_termios; /* In order to restore at exit. */
 
-#define UP "\033[A"
-#define DOWN "\033[B"
-#define RIGHT "\033[C"
-#define LEFT "\033[D"
+#define ANSI_COLOR_RED "\x1b[31m"
+#define ANSI_COLOR_GREEN "\x1b[32m"
+#define ANSI_COLOR_YELLOW "\x1b[33m"
+#define ANSI_COLOR_BLUE "\x1b[34m"
+#define ANSI_COLOR_MAGENTA "\x1b[35m"
+#define ANSI_COLOR_CYAN "\x1b[36m"
+#define ANSI_COLOR_RESET "\x1b[0m"
 
 int enableRawMode(int fd)
 {
@@ -39,15 +42,30 @@ void initiateNewLine(EditorState *e)
     e->cursor_y += 1;
 }
 
-void updateScreen(EditorState *e)
-{
+// fix segmentation fault here:
+
+void updateScreen(EditorState *e) {
     write(STDOUT_FILENO, "\x1b[2J", 4); // Clear the screen
     write(STDOUT_FILENO, "\x1b[H", 3);  // Move cursor to top-left position
-    for (int i = 0; i < e->lineCount; i++)
-    {
-        if (e->lines[i]->lineContent != NULL)
-        {
-            write(STDOUT_FILENO, e->lines[i]->lineContent, strlen(e->lines[i]->lineContent));
+    char **words;
+    int word_count = 0;
+
+    for (int i = 0; i < e->lineCount; i++) {
+        if (e->lines[i]->lineContent != NULL) {
+            words = ret_words(e->lines[i]->lineContent, &word_count);
+            if (words) {
+                for (int j = 0; j < word_count; j++) {
+                    if (is_c_keyword(words[j])) {
+                        write(STDOUT_FILENO, ANSI_COLOR_RED, strlen(ANSI_COLOR_RED));
+                        write(STDOUT_FILENO, words[j], strlen(words[j]));
+                        write(STDOUT_FILENO, ANSI_COLOR_RESET, strlen(ANSI_COLOR_RESET));
+                    } else {
+                        write(STDOUT_FILENO, words[j], strlen(words[j]));
+                    }
+                    free(words[j]); // Free the allocated memory for each word
+                }
+                free(words); // Free the allocated memory for the words list
+            }
         }
     }
 }
@@ -61,7 +79,7 @@ void insert_key_press(int key_press, EditorState *editor)
     case UP_ARROW:
 
         editor->cursor_y = (editor->cursor_y > 0) ? (editor->cursor_y - 1) : (editor->cursor_x = 0);
-         break;
+        break;
     case DOWN_ARROW:
         if (editor->cursor_y == editor->lineCount)
         {
@@ -71,7 +89,7 @@ void insert_key_press(int key_press, EditorState *editor)
         {
             editor->cursor_y += 1;
         }
-         updateScreen(editor);
+        updateScreen(editor);
         break;
     case RIGHT_ARROW:
         if (editor->cursor_x == strlen(editor->lines[editor->cursor_y]->lineContent))
@@ -85,7 +103,7 @@ void insert_key_press(int key_press, EditorState *editor)
         {
             editor->cursor_x += 1;
         }
-         updateScreen(editor);
+        updateScreen(editor);
         break;
     case LEFT_ARROW:
         if (editor->cursor_x == 0)
@@ -99,7 +117,7 @@ void insert_key_press(int key_press, EditorState *editor)
         {
             editor->cursor_x -= 1;
         }
- 
+
         updateScreen(editor);
         break;
     }
