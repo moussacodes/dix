@@ -72,7 +72,7 @@ int enableRawMode(int fd);
 void initiateNewLine(EditorState *e);
 void updateScreen(EditorState *e);
 void insertChar(char addedChar, EditorState *e);
-void addCharToBuffer(const char addedChar, Line *line);
+void addCharToBuffer(const char addedChar, EditorState *e);
 void freeEditor(EditorState *e);
 void insert_key_press(int key_press, EditorState *editor);
 

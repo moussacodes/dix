@@ -2,13 +2,10 @@
 
 static struct termios orig_termios; /* In order to restore at exit. */
 
-#define ANSI_COLOR_RED "\x1b[31m"
-#define ANSI_COLOR_GREEN "\x1b[32m"
-#define ANSI_COLOR_YELLOW "\x1b[33m"
-#define ANSI_COLOR_BLUE "\x1b[34m"
-#define ANSI_COLOR_MAGENTA "\x1b[35m"
-#define ANSI_COLOR_CYAN "\x1b[36m"
-#define ANSI_COLOR_RESET "\x1b[0m"
+#define UP "\033[A"
+#define DOWN "\033[B"
+#define RIGHT "\033[C"
+#define LEFT "\033[D"
 
 int enableRawMode(int fd)
 {
@@ -42,32 +39,23 @@ void initiateNewLine(EditorState *e)
     e->cursor_y += 1;
 }
 
-// fix segmentation fault here:
+void move_cursor(int x, int y)
+{
+    printf("\x1b[%d;%dH", y, x);
+}
 
-void updateScreen(EditorState *e) {
+void updateScreen(EditorState *e)
+{
     write(STDOUT_FILENO, "\x1b[2J", 4); // Clear the screen
     write(STDOUT_FILENO, "\x1b[H", 3);  // Move cursor to top-left position
-    char **words;
-    int word_count = 0;
-
-    for (int i = 0; i < e->lineCount; i++) {
-        if (e->lines[i]->lineContent != NULL) {
-            words = ret_words(e->lines[i]->lineContent, &word_count);
-            if (words) {
-                for (int j = 0; j < word_count; j++) {
-                    if (is_c_keyword(words[j])) {
-                        write(STDOUT_FILENO, ANSI_COLOR_RED, strlen(ANSI_COLOR_RED));
-                        write(STDOUT_FILENO, words[j], strlen(words[j]));
-                        write(STDOUT_FILENO, ANSI_COLOR_RESET, strlen(ANSI_COLOR_RESET));
-                    } else {
-                        write(STDOUT_FILENO, words[j], strlen(words[j]));
-                    }
-                    free(words[j]); // Free the allocated memory for each word
-                }
-                free(words); // Free the allocated memory for the words list
-            }
+    for (int i = 0; i < e->lineCount; i++)
+    {
+        if (e->lines[i]->lineContent != NULL)
+        {
+            write(STDOUT_FILENO, e->lines[i]->lineContent, strlen(e->lines[i]->lineContent));
         }
     }
+    printf("\x1b[%d;%dH", e->cursor_y, e->cursor_x);
 }
 
 void insert_key_press(int key_press, EditorState *editor)
@@ -79,6 +67,7 @@ void insert_key_press(int key_press, EditorState *editor)
     case UP_ARROW:
 
         editor->cursor_y = (editor->cursor_y > 0) ? (editor->cursor_y - 1) : (editor->cursor_x = 0);
+
         break;
     case DOWN_ARROW:
         if (editor->cursor_y == editor->lineCount)
@@ -103,6 +92,7 @@ void insert_key_press(int key_press, EditorState *editor)
         {
             editor->cursor_x += 1;
         }
+
         updateScreen(editor);
         break;
     case LEFT_ARROW:
@@ -123,6 +113,38 @@ void insert_key_press(int key_press, EditorState *editor)
     }
 }
 
+// void insert_key_press(int key_press, EditorState *editor)
+// {
+//     switch (key_press)
+//     {
+//     case UP_ARROW:
+//         editor->cursor_y = (editor->cursor_y > 0) ? (editor->cursor_y - 1) : 0;
+//         move_cursor(editor->cursor_x + 1, editor->cursor_y + 1);
+//         break;
+//     case DOWN_ARROW:
+//         if (editor->cursor_y < editor->lineCount - 1)
+//         {
+//             editor->cursor_y += 1;
+//         }
+//         move_cursor(editor->cursor_x + 1, editor->cursor_y + 1);
+//         break;
+//     case RIGHT_ARROW:
+//         if (editor->lines[editor->cursor_y]->position > editor->cursor_x)
+//         {
+//             editor->cursor_x += 1;
+//         }
+//         move_cursor(editor->cursor_x + 1, editor->cursor_y + 1);
+//         break;
+//     case LEFT_ARROW:
+//         if (editor->cursor_x > 0)
+//         {
+//             editor->cursor_x -= 1;
+//         }
+//         move_cursor(editor->cursor_x + 1, editor->cursor_y + 1);
+//         break;
+//     }
+// }
+
 void insertChar(char addedChar, EditorState *e)
 {
     Line *line = e->lines[e->lineCount - 1];
@@ -131,7 +153,7 @@ void insertChar(char addedChar, EditorState *e)
     switch (addedChar)
     {
     case ENTER:
-        addCharToBuffer('\n', line);
+        addCharToBuffer('\n', e);
         initiateNewLine(e);
         updateScreen(e);
         break;
@@ -179,7 +201,7 @@ void insertChar(char addedChar, EditorState *e)
 
         for (int i = 0; i < 4; i++)
         {
-            addCharToBuffer(' ', line);
+            addCharToBuffer(' ', e);
         }
         e->cursor_x += 4;
         // maybe i'll replace it with addCharToBuffer('\t', line); later on
@@ -187,18 +209,18 @@ void insertChar(char addedChar, EditorState *e)
         break;
 
     default:
-        addCharToBuffer(addedChar, line);
-        e->cursor_x += 1;
+        addCharToBuffer(addedChar, e);
         updateScreen(e);
         break;
     }
 }
 
-void addCharToBuffer(const char addedChar, Line *line)
+void addCharToBuffer(const char addedChar, EditorState *e)
 {
+    Line *line = e->lines[e->cursor_y];
     if (line->lineContent == NULL)
     {
-        line->lineContent = malloc(2 * sizeof(char)); // Allocate initial memory for one character and the null terminator
+        line->lineContent = malloc(2 * sizeof(char));
         CHECK_MEMORY(line->lineContent);
         line->lineContent[0] = addedChar;
         line->lineContent[1] = '\0';
@@ -213,9 +235,18 @@ void addCharToBuffer(const char addedChar, Line *line)
             exit(EXIT_FAILURE);
         }
         line->lineContent = temp_ptr;
-        line->lineContent[line->position] = addedChar;
-        line->lineContent[line->position + 1] = '\0'; // Update the null terminator
-        line->position++;                             // Increment the position
+        for (int i = line->position; i >= e->cursor_x; i--)
+        {
+            line->lineContent[i + 1] = line->lineContent[i];
+        }
+
+        line->lineContent[e->cursor_x] = addedChar;
+        if (e->cursor_x == line->position)
+        {
+            line->lineContent[e->cursor_x + 1] = '\0'; // Update the null terminator
+        }
+        e->cursor_x++;
+        line->position++; // Increment the position
     }
 }
 
